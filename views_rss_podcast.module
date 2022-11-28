@@ -1,0 +1,263 @@
+<?php
+
+/**
+ * @file
+ * Provides Podcast RSS namespace, <channel> and <item> elements for Views RSS module.
+ * Podcast support dato for Spotify, Amazon Alexa, Apple Podcast & Google Assistant feed types.
+ */
+
+/**
+ * Implements hook_views_rss_namespaces().
+ */
+function views_rss_podcast_views_rss_namespaces() {
+  $namespaces['itunes'] = [
+    'prefix' => 'xmlns',
+    'uri' => 'http://www.itunes.com/dtds/podcast-1.0.dtd',
+  ];
+  return $namespaces;
+}
+/**
+ * Implements hook_views_rss_namespaces_elements_alter().
+ * Clean base views_rss_core namespaces.
+ */
+function views_rss_podcast_views_rss_namespaces_alter(&$namespaces) {
+  unset($namespaces['views_rss_core']);
+  return $namespaces;
+}
+/**
+ * Implements hook_views_rss_channel_elements_alter().
+ * Clean some base views_rss_core channel variables.
+ */
+function views_rss_podcast_views_rss_channel_elements_alter(&$elements) {
+  unset($elements['views_rss_core']['pubDate']);
+  unset($elements['views_rss_core']['atom:link']);
+  unset($elements['views_rss_core']['lastBuildDate']);
+  return $elements;
+}
+/**
+ * Implements hook_views_rss_channel_elements().
+ */
+function views_rss_podcast_views_rss_channel_elements() {
+  $elements['itunes:author'] = array(
+    'description' => t('The content of this tag is shown in the Artist column in iTunes. If the tag is not present, iTunes uses the contents of the &lt;author&gt; tag. If &lt;itunes:author&gt; is not present at the feed level, iTunes will use the contents of &lt;managingEditor&gt;.'),
+    'help' => 'http://www.apple.com/itunes/podcasts/specs.html#author',
+  );
+  $elements['itunes:image'] = array(
+    'description' => t('Path to the image to be used as the artwork for your podcast, for example <em>sites/default/files/AllAboutEverything.jpg</em>. iTunes prefers square .jpg images that are at least 600 x 600 pixels. iTunes supports images in JPEG and PNG formats with a RGB color space (CMYK is not supported). If the tag is not present, iTunes will use the contents of the RSS &lt;image&gt; tag.'),
+    'preprocess functions' => array('views_rss_podcast_preprocess_channel_image'),
+    'help' => 'http://www.apple.com/itunes/podcasts/specs.html#image',
+  );
+  $elements['itunes:explicit'] = array(
+    'settings form' => array(
+      '#type' => 'select',
+      '#options' => array('', 'yes', 'no', 'clean'),
+    ),
+    'description' => t('This tag should be used to indicate whether or not your podcast contains explicit material.'),
+    'help' => 'http://www.apple.com/itunes/podcasts/specs.html#explicit',
+  );
+  $elements['itunes:category'] = array(
+    'description' => t('The contents of this tag are shown in the Description column in iTunes. The subtitle displays best if it is only a few words long.'),
+    'preprocess functions' => array('views_rss_podcast_preprocess_channel_category'),
+    'help' => 'http://www.apple.com/itunes/podcasts/specs.html#subtitle',
+  );
+  $elements['image'] = array(
+    'description' => t('image tag added from Podcast module'),
+    'preprocess functions' => array('views_rss_podcast_preprocess_channel_image_group'),
+    'help' => 'http://www.apple.com/itunes/podcasts/specs.html#owner',
+  );
+  $elements['itunes:owner'] = array(
+    'description' => t('This tag contains information that will be used to contact the owner of the podcast for communication specifically about their podcast. It will not be publicly displayed. Enter owner\'s email address followed by their name, separating them with comma.'),
+    'preprocess functions' => array('views_rss_podcast_preprocess_channel_owner'),
+    'help' => 'http://www.apple.com/itunes/podcasts/specs.html#owner',
+  );
+  return $elements;
+}
+/**
+ * Implements hook_views_rss_item_elements().
+ */
+function views_rss_podcast_views_rss_item_elements() {
+  $elements['title'] = [
+    'description' => t('Title tag added from Podcast module'),
+    'preprocess functions' => ['views_rss_podcast_preprocess_item_title'],
+    'help' => '',
+    'cdata' => TRUE,
+  ];
+  $elements['pubDate'] = [
+    'description' => t('pubDate tag added from Podcast module'),
+    'preprocess functions' => ['views_rss_rewrite_relative_paths'],
+    'help' => '',
+  ];
+  $elements['enclosure'] = [
+    'description' => t('Enclosure tag added from Podcast module'),
+    'preprocess functions' => ['views_rss_podcast_preprocess_item_enclosure'],    
+    'help' => '',
+  ];
+  $elements['itunes:duration'] = [
+    'description' => t('Duration tag added from Podcast module'),
+    'preprocess functions' => ['views_rss_podcast_preprocess_item_duration'],    
+    'help' => '',
+  ];
+  return $elements;
+}
+/**
+ * Preprocess function for item <itunes:owner> element.
+ *
+ * Enable <itunes:owner> to show only <itunes:email> value.
+ */
+function views_rss_podcast_preprocess_channel_owner(&$variables){
+  if (empty($variables['elements'][0]['value'])) {
+    return;
+  }
+  $values = explode(',', $variables['elements'][0]['value']);
+  $email = array_shift($values);
+  $variables['elements'][0]['value'] = [];
+  $variables['elements'][0]['value'][] = [
+    '#type' => 'html_tag',
+    '#tag' => 'itunes:email',
+    '#value' => trim($email),
+  ];
+  if(count($values) > 0){
+    $name = array_shift($values);
+    $variables['elements'][0]['value'][] = [
+      '#type' => 'html_tag',
+      '#tag' => 'itunes:name',
+      '#value' => trim($name),
+    ];
+  }
+}
+/**
+ * Preprocess function for item <itunes:image> element.
+ *
+ * Add to <itunes:image> inside tag attributes.
+ */
+function views_rss_podcast_preprocess_channel_image(&$variables){
+  if (empty($variables['elements'][0]['value'])) {
+    return;
+  }
+  $url_imagen = $variables['elements'][0]['value'];
+  $variables['elements'] = [];
+    $element = [
+      'key' => 'itunes:image',
+      'attributes' => array('href' => $url_imagen),
+    ];
+  $variables['elements'][] = $element;
+}
+/**
+ * Preprocess function for item <image> element.
+ *
+ * Add to <image> new tags for Google Assistant support.
+ */
+function views_rss_podcast_preprocess_channel_image_group(&$variables){
+  if (empty($variables['elements'][0]['value'])) {
+    return;
+  }
+  $values = explode(',', $variables['elements'][0]['value']);
+  $url = $values[0];
+  $variables['elements'][0]['value'] = [];
+  $variables['elements'][0]['value'][] = [
+    '#type' => 'html_tag',
+    '#tag' => 'url',
+    '#value' => trim($url)
+  ];
+  $title = $values[1];
+  $variables['elements'][0]['value'][] = [
+    '#type' => 'html_tag',
+    '#tag' => 'title',
+    '#value' => trim($title)
+  ];
+  $link = $values[2];
+  $variables['elements'][0]['value'][] = [
+    '#type' => 'html_tag',
+    '#tag' => 'link ',
+    '#value' => trim($link)
+  ];
+}
+/**
+ * Preprocess function for item <itunes:category> element.
+ *
+ * Add to <itunes:category> inside tag attributes.
+ */
+function views_rss_podcast_preprocess_channel_category(&$variables){
+  if (empty($variables['elements'][0]['value'])) {
+    return;
+  }
+  $url_imagen = $variables['elements'][0]['value'];
+  $variables['elements'] = [];
+    $element = [
+      'key' => 'itunes:category',
+      'attributes' => array('text' => $url_imagen),
+    ];
+  $variables['elements'][] = $element;
+}
+/**
+ * Preprocess function for item <enclosure> element.
+ *
+ * Add to <enclosure> inside tag attributes and put file length and type.
+ */
+function views_rss_podcast_preprocess_item_enclosure(&$variables){
+  if (empty($variables['elements'][0]['value'])) {
+    return;
+  }
+  foreach ($variables['raw']['items'] as $item) {
+    $url_audio = $item['rendered']['#context']['value'];
+  }
+  $mp3_data = get_remote_file_info($item['rendered']['#context']['value']);
+  $variables['elements'] = [];
+    $element = [
+      'key' => 'enclosure',
+      'attributes' => array('url' => $url_audio, 'type' => 'audio/mpeg', 'length' => $mp3_data['fileSize']),
+    ];
+  $variables['elements'][] = $element;
+}
+/**
+ * Preprocess function for item <title> element.
+ *
+ * Add <![CDATA[{{ title }}]]> to <title> tag.
+ */
+function views_rss_podcast_preprocess_item_title(&$variables){
+  if (empty($variables['elements'][0]['value'])) {
+    return;
+  }
+  $variables['elements'][0]['value'] = [
+    '#type' => 'inline_template',
+    '#template' => '<![CDATA[{{ title }}]]>',
+    '#context' => [
+      'title' => $variables['elements'][0]['value'],
+    ],
+    '#cache' => [
+        'max-age' => 0,
+    ],
+  ];
+}
+/**
+ * Preprocess function for item <itunes:duration> element.
+ *
+ * Change time format (HH:MM:SS) to only seconds.
+ */
+function views_rss_podcast_preprocess_item_duration(&$variables){
+  if (empty($variables['elements'][0]['value']) || empty($variables['raw']['items'])) {
+    return;
+  }
+  sscanf($variables['elements'][0]['value'], "%d:%d:%d", $hours, $minutes, $seconds);
+  $time_seconds = isset($seconds) ? $hours * 3600 + $minutes * 60 + $seconds : $hours * 60 + $minutes;
+  $variables['elements'][0]['value'] = $time_seconds;
+}
+/**
+ * Function get_remote_file_info.
+ *
+ * Get length from a file.
+ */
+function get_remote_file_info($url) {
+  $ch = curl_init($url);
+  curl_setopt($ch, CURLOPT_RETURNTRANSFER, TRUE);
+  curl_setopt($ch, CURLOPT_HEADER, TRUE);
+  curl_setopt($ch, CURLOPT_NOBODY, TRUE);
+  $data = curl_exec($ch);
+  $fileSize = curl_getinfo($ch, CURLINFO_CONTENT_LENGTH_DOWNLOAD);
+  $httpResponseCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+  curl_close($ch);
+  return [
+      'fileExists' => (int) $httpResponseCode == 200,
+      'fileSize' => (int) $fileSize
+  ];
+}

@@ -1,0 +1,12 @@
+name: 'Views RSS: Podcast Elements'
+type: module
+description: 'Provides Podcast (Spotify, Amazon Alexa, Apple Podcast & Google Assistant) metadata element set for Views RSS.'
+package: Views
+core_version_requirement: ^9
+dependencies:
+- views_rss_core
+
+# Information added by Drupal.org packaging script on 2022-11-25
+version: '8.x-1.x-dev'
+project: 'views_rss_podcast'
+datestamp: 1669414208
